@@ -25,22 +25,22 @@ class _KunjunganDetailScreenState extends State<KunjunganDetailScreen> {
   void initState() {
     super.initState();
     _kunjungan = widget.kunjungan;
-    _computeDistance();
+    _calcDistance();
   }
 
-  Future<void> _computeDistance() async {
+  Future<void> _calcDistance() async {
     setState(() => _isLoadingDistance = true);
-    final userPos = await _locationService.getCurrentLocation();
-    if (userPos != null) {
-      final meters = _locationService.calculateDistanceInMeters(
-        userPos.latitude,
-        userPos.longitude,
+    final pos = await _locationService.getCurrentLocation();
+    if (pos != null) {
+      final m = _locationService.calculateDistanceInMeters(
+        pos.latitude,
+        pos.longitude,
         _kunjungan.latitude,
         _kunjungan.longitude,
       );
       if (mounted) {
         setState(() {
-          _distanceText = _locationService.formatDistance(meters);
+          _distanceText = _locationService.formatDistance(m);
           _isLoadingDistance = false;
         });
       }
@@ -54,23 +54,19 @@ class _KunjunganDetailScreenState extends State<KunjunganDetailScreen> {
     }
   }
 
-  Future<void> _confirmDelete() async {
+  Future<void> _deleteKunjungan() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 48),
         title: const Text('Hapus Data Kunjungan?'),
-        content: Text(
-          'Apakah Anda yakin ingin menghapus data kunjungan ke "${_kunjungan.namaPelanggan}"?\n'
-          'Tindakan ini tidak dapat dibatalkan.',
-        ),
+        content: Text('Kunjungan ke "${_kunjungan.namaPelanggan}" akan dihapus permanen.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Batal'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Hapus'),
           ),
@@ -78,24 +74,20 @@ class _KunjunganDetailScreenState extends State<KunjunganDetailScreen> {
       ),
     );
 
-    if (confirm == true) {
-      if (_kunjungan.id != null) {
-        await _dbHelper.deleteKunjungan(_kunjungan.id!);
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Data kunjungan berhasil dihapus'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pop(context, true);
-      }
+    if (confirm == true && _kunjungan.id != null) {
+      await _dbHelper.deleteKunjungan(_kunjungan.id!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data kunjungan telah dihapus.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pop(context, true);
     }
   }
 
-  Future<void> _navigateToEdit() async {
+  Future<void> _editKunjungan() async {
     final updated = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -103,232 +95,264 @@ class _KunjunganDetailScreenState extends State<KunjunganDetailScreen> {
       ),
     );
 
-    if (updated == true && mounted && _kunjungan.id != null) {
+    if (updated == true && _kunjungan.id != null) {
       final fresh = await _dbHelper.getKunjunganById(_kunjungan.id!);
-      if (fresh != null) {
-        setState(() {
-          _kunjungan = fresh;
-        });
-        _computeDistance();
+      if (fresh != null && mounted) {
+        setState(() => _kunjungan = fresh);
+        _calcDistance();
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detail Kunjungan'),
+        title: const Text('Rincian Kunjungan'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit Data',
-            onPressed: _navigateToEdit,
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            tooltip: 'Ubah Data',
+            onPressed: _editKunjungan,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
             tooltip: 'Hapus Data',
-            onPressed: _confirmDelete,
+            onPressed: _deleteKunjungan,
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header Card Nama & Status
-            Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              color: theme.colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: theme.colorScheme.primary,
-                      child: const Icon(Icons.store, size: 40, color: Colors.white),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _kunjungan.namaPelanggan,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onPrimaryContainer,
+            // Header Profile Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
                       ),
-                      textAlign: TextAlign.center,
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Center(
+                      child: Text(
+                        _kunjungan.namaPelanggan.isNotEmpty
+                            ? _kunjungan.namaPelanggan[0].toUpperCase()
+                            : 'K',
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _kunjungan.namaPelanggan,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.event, size: 16),
-                        const SizedBox(width: 4),
+                        const Icon(Icons.calendar_today, size: 12, color: Color(0xFF64748B)),
+                        const SizedBox(width: 6),
                         Text(
-                          'Tanggal: ${_kunjungan.tanggal}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                          'Kunjungan: ${_kunjungan.tanggal}',
+                          style: const TextStyle(
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
+                            color: Color(0xFF475569),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Card Jarak & Tombol Navigasi
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.navigation, color: Colors.teal),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Jarak & Navigasi',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.teal.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.directions_car, color: Colors.teal.shade800),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Jarak dari posisi petugas:',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                                ),
-                                const SizedBox(height: 2),
-                                _isLoadingDistance
-                                    ? const SizedBox(
-                                        height: 16,
-                                        width: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : Text(
-                                        _distanceText ?? 'Menghitung...',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.teal.shade900,
-                                        ),
-                                      ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.refresh, size: 20),
-                            onPressed: _computeDistance,
-                            tooltip: 'Perbarui Jarak',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () {
-                        _locationService.openGoogleMapsNavigation(
-                          _kunjungan.latitude,
-                          _kunjungan.longitude,
-                          label: _kunjungan.namaPelanggan,
-                        );
-                      },
-                      icon: const Icon(Icons.map),
-                      label: const Text('Buka Rute di Google Maps'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.teal.shade700,
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            // Distance & Navigation Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // Card Detail Kontak & Alamat
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.redAccent,
-                        child: Icon(Icons.location_on, color: Colors.white),
-                      ),
-                      title: const Text('Alamat Lengkap'),
-                      subtitle: Text(_kunjungan.alamat),
-                    ),
-                    const Divider(),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.green,
-                        child: Icon(Icons.phone, color: Colors.white),
-                      ),
-                      title: const Text('Nomor HP / WhatsApp'),
-                      subtitle: Text(_kunjungan.noHp),
-                    ),
-                    const Divider(),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.blueGrey,
-                        child: Icon(Icons.my_location, color: Colors.white),
-                      ),
-                      title: const Text('Titik Koordinat'),
-                      subtitle: Text('${_kunjungan.latitude}, ${_kunjungan.longitude}'),
-                    ),
-                    if (_kunjungan.catatan.isNotEmpty) ...[
-                      const Divider(),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const CircleAvatar(
-                          backgroundColor: Colors.amber,
-                          child: Icon(Icons.note_alt, color: Colors.white),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Estimasi Jarak dari Posisi Anda',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
                         ),
-                        title: const Text('Catatan Kunjungan'),
-                        subtitle: Text(_kunjungan.catatan),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        onPressed: _calcDistance,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Hitung Ulang',
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 4),
+                  _isLoadingDistance
+                      ? const Row(
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Menghitung jarak GPS...', style: TextStyle(fontSize: 13)),
+                          ],
+                        )
+                      : Text(
+                          _distanceText ?? 'Tidak diketahui',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0D9488),
+                          ),
+                        ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      _locationService.openGoogleMapsNavigation(
+                        _kunjungan.latitude,
+                        _kunjungan.longitude,
+                        label: _kunjungan.namaPelanggan,
+                      );
+                    },
+                    icon: const Icon(Icons.directions_car, size: 18),
+                    label: const Text('Buka Rute di Google Maps'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E3A8A),
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Contact & Location Details
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  _buildDetailTile(
+                    title: 'Alamat Pelanggan',
+                    content: _kunjungan.alamat,
+                    icon: Icons.location_on_outlined,
+                  ),
+                  const Divider(height: 1, indent: 54, color: Color(0xFFF1F5F9)),
+                  _buildDetailTile(
+                    title: 'Nomor Kontak',
+                    content: _kunjungan.noHp,
+                    icon: Icons.phone_outlined,
+                  ),
+                  const Divider(height: 1, indent: 54, color: Color(0xFFF1F5F9)),
+                  _buildDetailTile(
+                    title: 'Koordinat GPS',
+                    content: '${_kunjungan.latitude}, ${_kunjungan.longitude}',
+                    icon: Icons.gps_fixed,
+                  ),
+                  if (_kunjungan.catatan.isNotEmpty) ...[
+                    const Divider(height: 1, indent: 54, color: Color(0xFFF1F5F9)),
+                    _buildDetailTile(
+                      title: 'Catatan Kunjungan',
+                      content: _kunjungan.catatan,
+                      icon: Icons.notes_rounded,
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDetailTile({
+    required String title,
+    required String content,
+    required IconData icon,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 20, color: const Color(0xFF475569)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  content,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0F172A),
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

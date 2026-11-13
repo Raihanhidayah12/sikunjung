@@ -13,18 +13,14 @@ class SensorScreen extends StatefulWidget {
 class _SensorScreenState extends State<SensorScreen> {
   final _sensorService = SensorService();
 
-  // Nilai Sensor
-  AccelerometerEvent? _accelerometerEvent;
-  GyroscopeEvent? _gyroscopeEvent;
-  MagnetometerEvent? _magnetometerEvent;
+  AccelerometerEvent? _accEvent;
+  GyroscopeEvent? _gyroEvent;
+  MagnetometerEvent? _magEvent;
 
-  double _compassHeading = 0.0;
-  String _cardinalDirection = 'U (Utara)';
-
-  // Error/Availability state
-  bool _accAvailable = true;
-  bool _gyroAvailable = true;
-  bool _magAvailable = true;
+  double _compassDegrees = 0.0;
+  String _cardinalText = 'U (Utara)';
+  int _shakeCount = 0;
+  DateTime _lastShake = DateTime.now();
 
   StreamSubscription<AccelerometerEvent>? _accSub;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
@@ -33,59 +29,46 @@ class _SensorScreenState extends State<SensorScreen> {
   @override
   void initState() {
     super.initState();
-    _startListeningSensors();
+    _initSensors();
   }
 
-  void _startListeningSensors() {
+  void _initSensors() {
     try {
-      _accSub = _sensorService.accelerometerStream.listen(
-        (event) {
-          if (mounted) setState(() => _accelerometerEvent = event);
-        },
-        onError: (_) {
-          if (mounted) setState(() => _accAvailable = false);
-        },
-      );
-    } catch (_) {
-      setState(() => _accAvailable = false);
-    }
+      _accSub = _sensorService.accelerometerStream.listen((event) {
+        if (!mounted) return;
+        setState(() => _accEvent = event);
 
-    try {
-      _gyroSub = _sensorService.gyroscopeStream.listen(
-        (event) {
-          if (mounted) setState(() => _gyroEvent = event);
-        },
-        onError: (_) {
-          if (mounted) setState(() => _gyroAvailable = false);
-        },
-      );
-    } catch (_) {
-      setState(() => _gyroAvailable = false);
-    }
-
-    try {
-      _magSub = _sensorService.magnetometerStream.listen(
-        (event) {
-          final heading = _sensorService.calculateHeadingDegrees(event.x, event.y);
-          final cardinal = _sensorService.getCardinalDirection(heading);
-          if (mounted) {
-            setState(() {
-              _magnetometerEvent = event;
-              _compassHeading = heading;
-              _cardinalDirection = cardinal;
-            });
+        // Deteksi guncangan interaktif
+        final now = DateTime.now();
+        if (now.difference(_lastShake).inMilliseconds > 800) {
+          if (_sensorService.isShakeDetected(x: event.x, y: event.y, z: event.z, threshold: 13.0)) {
+            _lastShake = now;
+            setState(() => _shakeCount++);
           }
-        },
-        onError: (_) {
-          if (mounted) setState(() => _magAvailable = false);
-        },
-      );
-    } catch (_) {
-      setState(() => _magAvailable = false);
-    }
-  }
+        }
+      });
+    } catch (_) {}
 
-  set _gyroEvent(GyroscopeEvent event) => _gyroscopeEvent = event;
+    try {
+      _gyroSub = _sensorService.gyroscopeStream.listen((event) {
+        if (!mounted) return;
+        setState(() => _gyroEvent = event);
+      });
+    } catch (_) {}
+
+    try {
+      _magSub = _sensorService.magnetometerStream.listen((event) {
+        if (!mounted) return;
+        final deg = _sensorService.calculateHeadingDegrees(event.x, event.y);
+        final cardinal = _sensorService.getCardinalDirection(deg);
+        setState(() {
+          _magEvent = event;
+          _compassDegrees = deg;
+          _cardinalText = cardinal;
+        });
+      });
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -95,310 +78,392 @@ class _SensorScreenState extends State<SensorScreen> {
     super.dispose();
   }
 
-  Widget _buildAxisProgress(String axis, double value, double maxVal, Color color, String unit) {
-    final clamped = (value / maxVal).clamp(-1.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24,
-            child: Text(
-              axis,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: (clamped + 1.0) / 2.0,
-                color: color,
-                backgroundColor: Colors.grey.shade200,
-                minHeight: 10,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 90,
-            child: Text(
-              '${value.toStringAsFixed(2)} $unit',
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sensor Perangkat'),
+        title: const Text('Sensor & Telemetri'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. KOMPAS DIGITAL DARI MAGNETOMETER
-            Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.explore, color: Colors.deepOrange),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Kompas Digital (Magnetometer)',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+            // 1. Digital Compass Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Kompas Magnetik',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 160,
-                          height: 160,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.deepOrange.shade200, width: 3),
-                            gradient: RadialGradient(
-                              colors: [Colors.orange.shade50, Colors.white],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.explore, size: 14, color: Color(0xFFD97706)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Magnetometer',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFB45309),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Kompas Dial Visual
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 170,
+                        height: 170,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFF8FAFC),
+                          border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 8,
+                              child: Text(
+                                'U',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.red.shade700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 8,
+                              child: Text(
+                                'S',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 8,
+                              child: Text(
+                                'T',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 8,
+                              child: Text(
+                                'B',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Jarum Kompas Halus
+                      TweenAnimationBuilder<double>(
+                        tween: Tween<double>(
+                          begin: 0,
+                          end: -_compassDegrees * (3.141592653589793 / 180),
+                        ),
+                        duration: const Duration(milliseconds: 200),
+                        builder: (_, angle, child) {
+                          return Transform.rotate(
+                            angle: angle,
+                            child: const Icon(
+                              Icons.navigation,
+                              size: 72,
+                              color: Color(0xFFEA580C),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '${_compassDegrees.toStringAsFixed(1)}°',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  Text(
+                    _cardinalText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 2. Shake Detector Test Card
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF16A34A),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.vibration, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Deteksi Goyang (Shake)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF14532D),
                           ),
                         ),
-                        // Jarum Kompas Berputar Sesuai Heading
-                        Transform.rotate(
-                          angle: (_compassHeading * (3.141592653589793 / 180) * -1),
-                          child: const Icon(
-                            Icons.navigation,
-                            size: 80,
-                            color: Colors.deepOrange,
-                          ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Goyangkan perangkat untuk menguji accelerometer',
+                          style: TextStyle(fontSize: 12, color: Colors.green.shade800),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '${_compassHeading.toStringAsFixed(1)}°',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepOrange,
-                      ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
                     ),
-                    Text(
-                      _cardinalDirection,
+                    child: Text(
+                      '$_shakeCount x',
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF16A34A),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Dihitung dengan rumus atan2(y, x) dari sensor Magnetometer.',
-                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 2. ACCELEROMETER
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.speed, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Accelerometer (Percepatan)',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Satuan: m/s² (Meter per detik kuadrat)',
-                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 12),
-                    if (!_accAvailable)
-                      const Text('Sensor Accelerometer tidak terdeteksi pada perangkat ini.',
-                          style: TextStyle(color: Colors.red))
-                    else if (_accelerometerEvent == null)
-                      const Text('Menunggu data accelerometer...')
-                    else ...[
-                      _buildAxisProgress('X', _accelerometerEvent!.x, 20.0, Colors.red, 'm/s²'),
-                      _buildAxisProgress('Y', _accelerometerEvent!.y, 20.0, Colors.green, 'm/s²'),
-                      _buildAxisProgress('Z', _accelerometerEvent!.z, 20.0, Colors.blue, 'm/s²'),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 3. GYROSCOPE
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.rotate_right, color: Colors.purple),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Gyroscope (Kecepatan Sudut)',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Satuan: rad/s (Radian per detik)',
-                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 12),
-                    if (!_gyroAvailable)
-                      const Text('Sensor Gyroscope tidak terdeteksi pada perangkat ini.',
-                          style: TextStyle(color: Colors.red))
-                    else if (_gyroscopeEvent == null)
-                      const Text('Menunggu data gyroscope...')
-                    else ...[
-                      _buildAxisProgress('X', _gyroscopeEvent!.x, 5.0, Colors.red, 'rad/s'),
-                      _buildAxisProgress('Y', _gyroscopeEvent!.y, 5.0, Colors.green, 'rad/s'),
-                      _buildAxisProgress('Z', _gyroscopeEvent!.z, 5.0, Colors.purple, 'rad/s'),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 4. MAGNETOMETER
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.waves, color: Colors.teal),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Magnetometer (Medan Magnet)',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Satuan: µT (MicroTesla)',
-                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 12),
-                    if (!_magAvailable)
-                      const Text('Sensor Magnetometer tidak terdeteksi pada perangkat ini.',
-                          style: TextStyle(color: Colors.red))
-                    else if (_magnetometerEvent == null)
-                      const Text('Menunggu data magnetometer...')
-                    else ...[
-                      _buildAxisProgress('X', _magnetometerEvent!.x, 100.0, Colors.red, 'µT'),
-                      _buildAxisProgress('Y', _magnetometerEvent!.y, 100.0, Colors.green, 'µT'),
-                      _buildAxisProgress('Z', _magnetometerEvent!.z, 100.0, Colors.teal, 'µT'),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // 5. SPESIFIKASI TEKNIS SENSOR UNTUK ASESOR
-            Card(
-              elevation: 1,
-              color: Colors.blueGrey.shade50,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.menu_book, color: Colors.blueGrey.shade800),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Penjelasan Teknis Sensor (Standar BNSP)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueGrey.shade900,
-                          ),
+            // 3. Sensor Gauge List
+            _buildSensorBarCard(
+              title: 'Akselerometer (Percepatan Linier)',
+              unit: 'm/s²',
+              color: const Color(0xFF2563EB),
+              x: _accEvent?.x ?? 0.0,
+              y: _accEvent?.y ?? 0.0,
+              z: _accEvent?.z ?? 0.0,
+              maxRange: 20.0,
+            ),
+            const SizedBox(height: 14),
+
+            _buildSensorBarCard(
+              title: 'Giroskop (Kecepatan Sudut)',
+              unit: 'rad/s',
+              color: const Color(0xFF7C3AED),
+              x: _gyroEvent?.x ?? 0.0,
+              y: _gyroEvent?.y ?? 0.0,
+              z: _gyroEvent?.z ?? 0.0,
+              maxRange: 6.0,
+            ),
+            const SizedBox(height: 14),
+
+            _buildSensorBarCard(
+              title: 'Magnetometer (Kerapatan Fluks Magnet)',
+              unit: 'µT',
+              color: const Color(0xFF0D9488),
+              x: _magEvent?.x ?? 0.0,
+              y: _magEvent?.y ?? 0.0,
+              z: _magEvent?.z ?? 0.0,
+              maxRange: 120.0,
+            ),
+            const SizedBox(height: 24),
+
+            // 4. Informasi Spesifikasi Teknis (Clean Collapsible Card)
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 18, color: Color(0xFF64748B)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Ringkasan Spesifikasi Sensor',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
                         ),
-                      ],
-                    ),
-                    const Divider(),
-                    const Text(
-                      '1. Accelerometer:\n'
-                      '   • Fungsi: Mengukur percepatan linier termasuk gaya gravitasi pada 3 sumbu.\n'
-                      '   • Satuan: m/s².\n'
-                      '   • Sampling Rate: 50-200 Hz, Rentang ukur: ±2g hingga ±16g.\n'
-                      '   • Penerapan: Deteksi orientasi layar, langkah kaki, dan Shake-to-Refresh.\n\n'
-                      '2. Gyroscope:\n'
-                      '   • Fungsi: Mengukur kecepatan sudut rotasi perangkat.\n'
-                      '   • Satuan: rad/s (radian/detik) atau °/s.\n'
-                      '   • Penerapan: Stabilisasi kamera, game gerak, navigasi inersia.\n\n'
-                      '3. Magnetometer:\n'
-                      '   • Fungsi: Mengukur intensitas dan arah medan magnet bumi.\n'
-                      '   • Satuan: µT (MicroTesla).\n'
-                      '   • Penerapan: Kompas digital dan kalibrasi arah navigasi peta.\n\n'
-                      '4. GPS (Global Positioning System):\n'
-                      '   • Fungsi: Sensor penentu koordinat global dari sinyal satelit GNSS.\n'
-                      '   • Satuan: Derajat desimal latitude & longitude.\n'
-                      '   • Akurasi: 3 - 15 meter tergantung kondisi cuaca dan visibilitas langit.',
-                      style: TextStyle(fontSize: 12, height: 1.4),
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  Divider(height: 20),
+                  Text(
+                    '• Accelerometer: Rentang ±2g s.d ±16g, sampling rate 50-200 Hz. Mendeteksi gaya gravitasi bumi dan guncangan pengguna.\n'
+                    '• Gyroscope: Rentang ±250 s.d ±2000 °/s, mengukur orientasi rotasi 3 dimensi.\n'
+                    '• Magnetometer: Rentang ±4800 µT, mengukur intensitas medan geomagnetik untuk kompas digital.\n'
+                    '• GNSS / GPS: Frekuensi L1/L5 satelit, estimasi koordinat desimal akurasi 3-10 m.',
+                    style: TextStyle(fontSize: 12, height: 1.5, color: Color(0xFF475569)),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSensorBarCard({
+    required String title,
+    required String unit,
+    required Color color,
+    required double x,
+    required double y,
+    required double z,
+    required double maxRange,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Text(
+                unit,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildAxisBar('X', x, maxRange, color),
+          const SizedBox(height: 8),
+          _buildAxisBar('Y', y, maxRange, color),
+          const SizedBox(height: 8),
+          _buildAxisBar('Z', z, maxRange, color),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAxisBar(String axis, double val, double maxRange, Color color) {
+    final progress = ((val / maxRange) + 1.0) / 2.0;
+    return Row(
+      children: [
+        SizedBox(
+          width: 16,
+          child: Text(
+            axis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: const Color(0xFFF1F5F9),
+              color: color,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 65,
+          child: Text(
+            val.toStringAsFixed(2),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

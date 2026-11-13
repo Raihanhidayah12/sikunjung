@@ -12,206 +12,201 @@ class NetworkScreen extends StatefulWidget {
 
 class _NetworkScreenState extends State<NetworkScreen> {
   final _networkService = NetworkService();
-  List<ConnectivityResult> _connectivityResults = [ConnectivityResult.none];
-  StreamSubscription<List<ConnectivityResult>>? _subscription;
+  List<ConnectivityResult> _results = [ConnectivityResult.none];
+  StreamSubscription<List<ConnectivityResult>>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _checkInitialNetwork();
-    _subscription = _networkService.onConnectivityChanged.listen((results) {
+    _checkNetwork();
+    _sub = _networkService.onConnectivityChanged.listen((results) {
       if (mounted) {
-        setState(() {
-          _connectivityResults = results;
-        });
+        setState(() => _results = results);
       }
     });
   }
 
-  Future<void> _checkInitialNetwork() async {
-    final results = await _networkService.checkConnectivity();
+  Future<void> _checkNetwork() async {
+    final res = await _networkService.checkConnectivity();
     if (mounted) {
-      setState(() {
-        _connectivityResults = results;
-      });
+      setState(() => _results = res);
     }
   }
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isOnline = _networkService.isConnected(_connectivityResults);
-    final statusText = _networkService.getConnectionTypeName(_connectivityResults);
+    final isOnline = _networkService.isConnected(_results);
+    final statusText = _networkService.getConnectionTypeName(_results);
 
-    IconData iconData = Icons.wifi_off;
-    Color statusColor = Colors.red;
+    IconData netIcon = Icons.wifi_off_rounded;
+    Color netColor = const Color(0xFFEF4444); // Red
 
-    if (_connectivityResults.contains(ConnectivityResult.wifi)) {
-      iconData = Icons.wifi;
-      statusColor = Colors.blue;
-    } else if (_connectivityResults.contains(ConnectivityResult.mobile)) {
-      iconData = Icons.signal_cellular_alt;
-      statusColor = Colors.green;
-    } else if (_connectivityResults.contains(ConnectivityResult.ethernet)) {
-      iconData = Icons.lan;
-      statusColor = Colors.teal;
+    if (_results.contains(ConnectivityResult.wifi)) {
+      netIcon = Icons.wifi_rounded;
+      netColor = const Color(0xFF2563EB); // Blue
+    } else if (_results.contains(ConnectivityResult.mobile)) {
+      netIcon = Icons.signal_cellular_alt_rounded;
+      netColor = const Color(0xFF10B981); // Green
+    } else if (_results.contains(ConnectivityResult.ethernet)) {
+      netIcon = Icons.lan_rounded;
+      netColor = const Color(0xFF0D9488); // Teal
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Status Jaringan Seluler & Wi-Fi'),
+        title: const Text('Status Konektivitas'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Status Card Real-time
-            Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: statusColor.withValues(alpha: 0.15),
-                      child: Icon(iconData, size: 48, color: statusColor),
+            // Status Hero Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: netColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      isOnline ? 'Terhubung ke Internet' : 'Mode Offline',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: statusColor,
-                      ),
+                    child: Icon(netIcon, size: 36, color: netColor),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    isOnline ? 'Terhubung' : 'Terputus (Offline)',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: netColor,
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        statusText,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                          fontSize: 14,
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    statusText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF334155),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Text(
                       isOnline
-                          ? 'Perangkat dapat memuat peta OpenStreetMap online dan fitur jaringan.'
-                          : 'Aplikasi beroperasi dalam mode Offline-First. Data kunjungan tetap aman tersimpan di SQLite lokal.',
+                          ? 'Perangkat dapat memuat peta OpenStreetMap dan sinkronisasi data.'
+                          : 'Aplikasi beroperasi dalam mode Offline-First. Data kunjungan tetap tersimpan lokal di SQLite.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700, height: 1.4),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Petunjuk Pengujian untuk Asesor
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+            // Arsitektur Offline-First
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.cloud_done_outlined, color: Color(0xFF1D4ED8), size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.science_outlined, color: Colors.indigo),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Skenario Pengujian Asesor',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        const Text(
+                          'Arsitektur Offline-First',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E3A8A),
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'SiKunjung dirancang agar petugas lapangan tetap dapat mencatat kunjungan dan merekam koordinat GPS di area terpencil (blank spot). Data otomatis tersimpan di SQLite lokal dan tidak akan hilang.',
+                          style: TextStyle(fontSize: 12, color: Colors.blue.shade900, height: 1.4),
                         ),
                       ],
                     ),
-                    const Divider(),
-                    const Text(
-                      '1. Matikan Wi-Fi atau aktifkan Mode Pesawat (Airplane Mode).\n'
-                      '2. Status jaringan akan langsung berubah menjadi "Offline" secara real-time.\n'
-                      '3. Banner peringatan offline akan muncul di Dashboard.\n'
-                      '4. Coba lakukan input data kunjungan baru (Tetap berhasil tersimpan ke SQLite).\n'
-                      '5. Buka halaman Peta (Tampil pesan banner penanganan offline).\n'
-                      '6. Nyalakan kembali Wi-Fi/data seluler untuk memverifikasi perubahan status.',
-                      style: TextStyle(fontSize: 13, height: 1.4),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Tabel Perbandingan Generasi Seluler
+            const Padding(
+              padding: EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Karakteristik Generasi Jaringan Seluler',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF64748B),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Teori Generasi Jaringan Seluler (Standar Asesmen BNSP)
-            Card(
-              elevation: 2,
-              color: Colors.grey.shade50,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.school, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Materi Generasi Jaringan Seluler (SKKNI)',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(),
-                    _buildGenTile(
-                      '2G (GSM / GPRS / EDGE)',
-                      'Kecepatan: ~100 - 384 Kbps | Latensi: 300 - 1000 ms\n'
-                      'Karakteristik: Komunikasi suara dan SMS, transfer data lambat.',
-                    ),
-                    _buildGenTile(
-                      '3G (UMTS / HSPA+)',
-                      'Kecepatan: ~2 - 42 Mbps | Latensi: 100 - 200 ms\n'
-                      'Karakteristik: Mulai mendukung browsing web, video call resolusi rendah.',
-                    ),
-                    _buildGenTile(
-                      '4G LTE',
-                      'Kecepatan: ~50 - 300 Mbps | Latensi: 20 - 50 ms\n'
-                      'Karakteristik: Standar utama komputasi mobile modern, streaming HD, peta interaktif, dan API cepat.',
-                    ),
-                    _buildGenTile(
-                      '5G (New Radio)',
-                      'Kecepatan: 1 - 10 Gbps | Latensi: <1 - 10 ms (Ultra-low latency)\n'
-                      'Karakteristik: Mendukung massive IoT, smart city, cloud gaming, dan telemedicine.',
-                    ),
-                    const Divider(),
-                    Text(
-                      'Kesesuaian untuk Aplikasi SiKunjung:\n'
-                      'Jaringan 4G LTE adalah pilihan paling ideal untuk operasional lapangan karena kestabilan sinyal dan kecepatan memuat peta OpenStreetMap. Namun dengan arsitektur Offline-First (SQLite), SiKunjung tetap berfungsi penuh 100% untuk pencatatan transaksi di wilayah tanpa sinyal seluler.',
-                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.blueGrey.shade900),
-                    ),
-                  ],
-                ),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  _buildGenRow(
+                    '2G (GSM / GPRS / EDGE)',
+                    'Kecepatan: ~100 - 384 Kbps | Latensi: 300 - 1000 ms\nCocok untuk panggilan suara dan SMS sederhana.',
+                    false,
+                  ),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  _buildGenRow(
+                    '3G (UMTS / HSPA+)',
+                    'Kecepatan: ~2 - 42 Mbps | Latensi: 100 - 200 ms\nMendukung transfer data web dan email mobile.',
+                    false,
+                  ),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  _buildGenRow(
+                    '4G LTE (Direkomendasikan)',
+                    'Kecepatan: ~50 - 300 Mbps | Latensi: 20 - 50 ms\nStandar ideal untuk aplikasi lapangan, peta tile real-time, dan GPS.',
+                    true,
+                  ),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  _buildGenRow(
+                    '5G NR (New Radio)',
+                    'Kecepatan: 1 - 10 Gbps | Latensi: <1 - 10 ms\nKonektivitas ultra-low latency untuk IoT massal dan streaming berat.',
+                    false,
+                  ),
+                ],
               ),
             ),
           ],
@@ -220,15 +215,43 @@ class _NetworkScreenState extends State<NetworkScreen> {
     );
   }
 
-  Widget _buildGenTile(String title, String desc) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
+  Widget _buildGenRow(String title, String desc, bool isHighlighted) {
+    return Container(
+      color: isHighlighted ? const Color(0xFFF0FDF4) : Colors.transparent,
+      padding: const EdgeInsets.all(14),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 2),
-          Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+          Icon(
+            isHighlighted ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 18,
+            color: isHighlighted ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isHighlighted ? const Color(0xFF14532D) : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  desc,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isHighlighted ? const Color(0xFF166534) : const Color(0xFF64748B),
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

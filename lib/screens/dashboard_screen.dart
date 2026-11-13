@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../database/database_helper.dart';
+import '../models/kunjungan.dart';
 import '../services/auth_service.dart';
 import '../services/network_service.dart';
 import '../widgets/offline_banner.dart';
-import '../widgets/stat_card.dart';
 import 'kunjungan_list_screen.dart';
 import 'kunjungan_form_screen.dart';
+import 'kunjungan_detail_screen.dart';
 import 'peta_screen.dart';
 import 'sensor_screen.dart';
 import 'network_screen.dart';
@@ -30,33 +31,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _currentUsername = 'Petugas';
   int _totalKunjungan = 0;
   int _kunjunganHariIni = 0;
+  List<Kunjungan> _recentKunjungan = [];
 
   bool _isOffline = false;
-  String _networkType = 'Memeriksa...';
-  StreamSubscription<List<ConnectivityResult>>? _networkSub;
+  StreamSubscription<List<ConnectivityResult>>? _netSub;
 
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
-    _initNetworkMonitoring();
+    _initNetwork();
   }
 
-  void _initNetworkMonitoring() {
-    _networkService.checkConnectivity().then((results) {
+  void _initNetwork() {
+    _networkService.checkConnectivity().then((res) {
       if (mounted) {
         setState(() {
-          _isOffline = !_networkService.isConnected(results);
-          _networkType = _networkService.getConnectionTypeName(results);
+          _isOffline = !_networkService.isConnected(res);
         });
       }
     });
 
-    _networkSub = _networkService.onConnectivityChanged.listen((results) {
+    _netSub = _networkService.onConnectivityChanged.listen((res) {
       if (mounted) {
         setState(() {
-          _isOffline = !_networkService.isConnected(results);
-          _networkType = _networkService.getConnectionTypeName(results);
+          _isOffline = !_networkService.isConnected(res);
         });
       }
     });
@@ -66,19 +65,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final username = await _authService.getCurrentUsername();
     final total = await _dbHelper.getTotalKunjunganCount();
     final hariIni = await _dbHelper.getKunjunganHariIniCount();
+    final all = await _dbHelper.getAllKunjungan();
 
     if (mounted) {
       setState(() {
         _currentUsername = username ?? 'Petugas';
         _totalKunjungan = total;
         _kunjunganHariIni = hariIni;
+        _recentKunjungan = all.take(3).toList();
       });
     }
   }
 
+  String _getTimeGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 4 && hour < 11) return 'Selamat Pagi ☀️';
+    if (hour >= 11 && hour < 15) return 'Selamat Siang 🌤️';
+    if (hour >= 15 && hour < 18) return 'Selamat Sore 🌇';
+    return 'Selamat Malam 🌙';
+  }
+
   @override
   void dispose() {
-    _networkSub?.cancel();
+    _netSub?.cancel();
     super.dispose();
   }
 
@@ -86,10 +95,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.logout, color: Colors.orange, size: 40),
-        title: const Text('Konfirmasi Logout'),
+        title: const Text('Keluar dari Akun?'),
         content: const Text(
-          'Apakah Anda yakin ingin keluar? Sesi login terenkripsi di Flutter Secure Storage akan dihapus.',
+          'Sesi login Anda akan diakhiri dan token autentikasi akan dibersihkan secara aman.',
         ),
         actions: [
           TextButton(
@@ -97,8 +105,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: const Text('Batal'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Logout'),
+            child: const Text('Ya, Keluar'),
           ),
         ],
       ),
@@ -106,111 +115,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (confirm == true) {
       await _authService.logout();
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
-      }
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 
-  void _showSecurityModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.75,
-          maxChildSize: 0.9,
-          builder: (_, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.security, color: Colors.indigo, size: 28),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Dasar Keamanan Mobile (J.612000.008.01)',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  const Text(
-                    'Penerapan Keamanan pada Aplikasi SiKunjung:\n\n'
-                    '1. Penyimpanan Kredensial Terenkripsi:\n'
-                    '   • Password tidak pernah disimpan dalam plain text, melainkan di-hash satu arah menggunakan algoritma SHA-256 (package crypto).\n'
-                    '   • Token sesi disimpan di KeyStore Android / Keychain iOS melalui flutter_secure_storage yang terenkripsi hardware-level AES.\n\n'
-                    '2. Pencegahan SQL Injection:\n'
-                    '   • Seluruh operasi query database SQLite menggunakan parameterized queries (? placeholder dengan whereArgs).\n'
-                    '   • Tidak menggunakan string concatenation mentah.\n\n'
-                    '3. Validasi Input Berlapis:\n'
-                    '   • Form login dan kunjungan divalidasi tipe data, panjang string, dan format regex nomor telepon.\n\n'
-                    '4. Prinsip Least Privilege (Hak Akses Minimal):\n'
-                    '   • Aplikasi hanya meminta izin runtime (Fine/Coarse Location) saat fitur GPS dibutuhkan, menggunakan permission_handler.\n\n'
-                    '5. Mitigasi Ancaman Keamanan Mobile Standar OWASP:\n'
-                    '   • Insecure Data Storage: Dimitigasi dengan hash SHA-256 dan flutter_secure_storage.\n'
-                    '   • Insecure Communication: Menggunakan HTTPS TLS untuk pengunduhan peta.\n'
-                    '   • Insufficient Session Expiration: Sesi otomatis dibersihkan saat tombol Logout ditekan.',
-                    style: TextStyle(fontSize: 13, height: 1.45),
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                    child: const Text('Tutup'),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildHomeView() {
-    final theme = Theme.of(context);
-
+  Widget _buildHomeTab() {
     return RefreshIndicator(
       onRefresh: _loadDashboardData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Banner Offline
-            OfflineBanner(isOffline: _isOffline),
+            // Banner Offline jika tidak ada koneksi
+            if (_isOffline) ...[
+              OfflineBanner(isOffline: _isOffline),
+              const SizedBox(height: 16),
+            ],
 
-            // Header Sambutan
+            // Profile Header Card
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0F172A), Color(0xFF1E3A8A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.2),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,214 +163,192 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            'Halo, $_currentUsername 👋',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onPrimaryContainer,
+                          CircleAvatar(
+                            radius: 22,
+                            backgroundColor: const Color(0xFF38BDF8).withValues(alpha: 0.2),
+                            child: Text(
+                              _currentUsername.isNotEmpty
+                                  ? _currentUsername[0].toUpperCase()
+                                  : 'P',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF38BDF8),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Petugas Lapangan SiKunjung',
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
-                              fontSize: 13,
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _getTimeGreeting(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF94A3B8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                _currentUsername,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: theme.colorScheme.primary,
-                        child: Text(
-                          _currentUsername.isNotEmpty ? _currentUsername[0].toUpperCase() : 'P',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
+                      // Status Koneksi Mini Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _isOffline
+                              ? Colors.red.withValues(alpha: 0.2)
+                              : Colors.teal.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _isOffline
+                                ? Colors.red.withValues(alpha: 0.4)
+                                : Colors.teal.withValues(alpha: 0.4),
                           ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _isOffline ? Colors.redAccent : const Color(0xFF2DD4BF),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _isOffline ? 'Offline' : 'Online',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _isOffline ? Colors.red.shade200 : const Color(0xFF2DD4BF),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // Status Bar Strip (Jaringan & GPS)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
+                  const Divider(color: Color(0xFF334155), height: 28),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, size: 16, color: Color(0xFF38BDF8)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'GPS Siap • Database SQLite Aktif',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.8),
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _isOffline ? Icons.wifi_off : Icons.wifi,
-                              size: 16,
-                              color: _isOffline ? Colors.red : Colors.green,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _networkType,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: _isOffline ? Colors.red : Colors.green.shade800,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.gps_fixed, size: 16, color: Colors.blue),
-                            const SizedBox(width: 4),
-                            Text(
-                              'GPS Aktif',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Stat Cards
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: StatCard(
-                      title: 'Total Kunjungan',
-                      value: '$_totalKunjungan',
-                      icon: Icons.assignment_turned_in,
-                      color: Colors.indigo,
-                      onTap: () {
-                        setState(() => _currentIndex = 1);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: StatCard(
-                      title: 'Kunjungan Hari Ini',
-                      value: '$_kunjunganHariIni',
-                      icon: Icons.today,
-                      color: Colors.teal,
-                      onTap: () {
-                        setState(() => _currentIndex = 1);
-                      },
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // Grid Menu Utama
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Menu Utama Aplikasi',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+            // 2 Summary Cards
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricCard(
+                    title: 'Total Kunjungan',
+                    count: '$_totalKunjungan',
+                    icon: Icons.folder_shared_outlined,
+                    accentColor: const Color(0xFF2563EB),
+                    onTap: () => setState(() => _currentIndex = 1),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _buildMetricCard(
+                    title: 'Kunjungan Hari Ini',
+                    count: '$_kunjunganHariIni',
+                    icon: Icons.event_available_outlined,
+                    accentColor: const Color(0xFF0D9488),
+                    onTap: () => setState(() => _currentIndex = 1),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.35,
-                children: [
-                  _buildMenuItem(
-                    context: context,
-                    icon: Icons.list_alt,
-                    title: 'Daftar Kunjungan',
-                    subtitle: 'Lihat, cari, & kelola',
-                    color: Colors.blue,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const KunjunganListScreen()),
-                      );
-                      _loadDashboardData();
-                    },
+            // Quick Actions Title
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Aksi Cepat',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
                   ),
-                  _buildMenuItem(
-                    context: context,
-                    icon: Icons.add_location_alt,
-                    title: 'Catat Kunjungan',
-                    subtitle: 'Input baru + GPS',
-                    color: Colors.green,
-                    onTap: () async {
-                      final added = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(builder: (_) => const KunjunganFormScreen()),
-                      );
-                      if (added == true) _loadDashboardData();
-                    },
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    final res = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(builder: (_) => const KunjunganFormScreen()),
+                    );
+                    if (res == true) _loadDashboardData();
+                  },
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Kunjungan Baru', style: TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Quick Action Grid (4 Clean Buttons)
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionTile(
+                    title: 'Daftar',
+                    icon: Icons.format_list_bulleted,
+                    color: const Color(0xFF2563EB),
+                    onTap: () => setState(() => _currentIndex = 1),
                   ),
-                  _buildMenuItem(
-                    context: context,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildActionTile(
+                    title: 'Peta',
                     icon: Icons.map_outlined,
-                    title: 'Peta Lokasi',
-                    subtitle: 'Sebaran & Navigasi',
-                    color: Colors.deepOrange,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const PetaScreen()),
-                      );
-                    },
+                    color: const Color(0xFFEA580C),
+                    onTap: () => setState(() => _currentIndex = 2),
                   ),
-                  _buildMenuItem(
-                    context: context,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildActionTile(
+                    title: 'Sensor',
                     icon: Icons.sensors,
-                    title: 'Sensor Perangkat',
-                    subtitle: 'Kompas & Akselerometer',
-                    color: Colors.purple,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SensorScreen()),
-                      );
-                    },
+                    color: const Color(0xFF7C3AED),
+                    onTap: () => setState(() => _currentIndex = 3),
                   ),
-                  _buildMenuItem(
-                    context: context,
-                    icon: Icons.signal_cellular_alt,
-                    title: 'Status Jaringan',
-                    subtitle: 'Deteksi Wi-Fi & Seluler',
-                    color: Colors.amber.shade900,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildActionTile(
+                    title: 'Jaringan',
+                    icon: Icons.wifi,
+                    color: const Color(0xFF0D9488),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -433,100 +356,229 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       );
                     },
                   ),
-                  _buildMenuItem(
-                    context: context,
-                    icon: Icons.smartphone,
-                    title: 'Info Perangkat',
-                    subtitle: 'OS, Versi & Spesifikasi',
-                    color: Colors.teal,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const DeviceInfoScreen()),
-                      );
-                    },
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
 
-            // Card Shortcut Security Explanation untuk Asesor
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                elevation: 1,
-                color: Colors.indigo.shade50,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Colors.indigo,
-                    child: Icon(Icons.shield, color: Colors.white),
+            // Recent Visits Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Kunjungan Terbaru',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
                   ),
-                  title: const Text(
-                    'Informasi Keamanan Aplikasi',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _currentIndex = 1),
+                  child: const Text('Lihat Semua', style: TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            if (_recentKunjungan.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Center(
+                  child: Text(
+                    'Belum ada data kunjungan yang tersimpan.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
-                  subtitle: const Text(
-                    'Enkripsi SHA-256, Secure Storage & SQL Injection Prevention',
-                    style: TextStyle(fontSize: 11),
+                ),
+              )
+            else
+              ..._recentKunjungan.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    onTap: () async {
+                      final updated = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => KunjunganDetailScreen(kunjungan: item),
+                        ),
+                      );
+                      if (updated == true) _loadDashboardData();
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.storefront,
+                              color: Color(0xFF2563EB),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.namaPelanggan,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  item.alamat,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                item.tanggal,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 12,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                  onTap: _showSecurityModal,
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMenuItem({
-    required BuildContext context,
-    required IconData icon,
+  Widget _buildMetricCard({
     required String title,
-    required String subtitle,
+    required String count,
+    required IconData icon,
+    required Color accentColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                Icon(icon, size: 20, color: accentColor),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              count,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: accentColor,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required String title,
+    required IconData icon,
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 24),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
-              const Spacer(),
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155),
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -535,7 +587,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      _buildHomeView(),
+      _buildHomeTab(),
       const KunjunganListScreen(),
       const PetaScreen(),
       const SensorScreen(),
@@ -544,43 +596,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'SiKunjung',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E3A8A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Icon(Icons.place, color: Colors.white, size: 18),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'SiKunjung',
+              style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.3),
+            ),
+          ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.shield_outlined),
-            tooltip: 'Keamanan Mobile',
-            onPressed: _showSecurityModal,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, size: 20),
             tooltip: 'Keluar',
             onPressed: _handleLogout,
           ),
         ],
       ),
-      body: pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: pages,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-          if (index == 0) {
-            _loadDashboardData();
-          }
+        onDestinationSelected: (idx) {
+          setState(() => _currentIndex = idx);
+          if (idx == 0) _loadDashboardData();
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
             label: 'Beranda',
           ),
           NavigationDestination(
-            icon: Icon(Icons.assignment_outlined),
-            selectedIcon: Icon(Icons.assignment),
+            icon: Icon(Icons.format_list_bulleted),
+            selectedIcon: Icon(Icons.list_alt),
             label: 'Kunjungan',
           ),
           NavigationDestination(
@@ -594,9 +656,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Sensor',
           ),
           NavigationDestination(
-            icon: Icon(Icons.info_outline),
-            selectedIcon: Icon(Icons.info),
-            label: 'Info',
+            icon: Icon(Icons.phone_android_outlined),
+            selectedIcon: Icon(Icons.phone_android),
+            label: 'Perangkat',
           ),
         ],
       ),

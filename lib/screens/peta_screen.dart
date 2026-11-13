@@ -26,16 +26,15 @@ class _PetaScreenState extends State<PetaScreen> {
   bool _isLoading = true;
   bool _isOffline = false;
 
-  // Titik default (Monas Jakarta) jika GPS belum didapatkan
-  static const LatLng _defaultCenter = LatLng(-6.2088, 106.8456);
+  static const LatLng _jakartaCenter = LatLng(-6.2088, 106.8456);
 
   @override
   void initState() {
     super.initState();
-    _checkNetworkAndLoad();
+    _loadMapData();
   }
 
-  Future<void> _checkNetworkAndLoad() async {
+  Future<void> _loadMapData() async {
     setState(() => _isLoading = true);
 
     final net = await _networkService.checkConnectivity();
@@ -54,44 +53,60 @@ class _PetaScreenState extends State<PetaScreen> {
       if (pos != null) {
         _mapController.move(LatLng(pos.latitude, pos.longitude), 13.0);
       } else if (data.isNotEmpty) {
-        _mapController.move(LatLng(data.first.latitude, data.first.longitude), 12.0);
+        _mapController.move(LatLng(data.first.latitude, data.first.longitude), 12.5);
       }
     }
   }
 
-  void _showMarkerDetails(Kunjungan k) {
-    String distanceText = 'Menghitung...';
+  void _showCustomerSheet(Kunjungan k) {
+    String distText = 'Menghitung...';
     if (_currentPosition != null) {
-      final meters = _locationService.calculateDistanceInMeters(
+      final m = _locationService.calculateDistanceInMeters(
         _currentPosition!.latitude,
         _currentPosition!.longitude,
         k.latitude,
         k.longitude,
       );
-      distanceText = _locationService.formatDistance(meters);
-    } else {
-      distanceText = 'Posisi Anda belum terbaca';
+      distText = _locationService.formatDistance(m);
     }
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Row(
                 children: [
-                  CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    child: const Icon(Icons.store, color: Colors.blue),
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.storefront, color: Color(0xFF2563EB), size: 24),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,55 +114,71 @@ class _PetaScreenState extends State<PetaScreen> {
                         Text(
                           k.namaPelanggan,
                           style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Tanggal: ${k.tanggal}',
+                          'Kunjungan: ${k.tanggal}',
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.teal.shade50,
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
                     ),
                     child: Text(
-                      distanceText,
-                      style: TextStyle(
+                      distText,
+                      style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal.shade800,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF15803D),
                       ),
                     ),
                   ),
                 ],
               ),
-              const Divider(height: 24),
+              const Divider(height: 24, color: Color(0xFFF1F5F9)),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.location_on_outlined, size: 16, color: Colors.red),
+                  const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF94A3B8)),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(k.alamat, maxLines: 2, overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                    child: Text(
+                      k.alamat,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.phone_outlined, size: 16, color: Colors.green),
+                  const Icon(Icons.phone_outlined, size: 16, color: Color(0xFF94A3B8)),
                   const SizedBox(width: 8),
-                  Text(k.noHp),
+                  Text(
+                    k.noHp,
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: OutlinedButton(
                       onPressed: () {
                         Navigator.pop(ctx);
                         Navigator.push(
@@ -157,8 +188,12 @@ class _PetaScreenState extends State<PetaScreen> {
                           ),
                         );
                       },
-                      icon: const Icon(Icons.info_outline),
-                      label: const Text('Detail'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Detail Lengkap'),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -172,9 +207,13 @@ class _PetaScreenState extends State<PetaScreen> {
                           label: k.namaPelanggan,
                         );
                       },
-                      icon: const Icon(Icons.navigation),
-                      label: const Text('Navigasi'),
-                      style: FilledButton.styleFrom(backgroundColor: Colors.teal.shade700),
+                      icon: const Icon(Icons.directions, size: 18),
+                      label: const Text('Rute Navigasi'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E3A8A),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
                   ),
                 ],
@@ -190,12 +229,12 @@ class _PetaScreenState extends State<PetaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Peta Sebaran Kunjungan'),
+        title: const Text('Peta Kunjungan'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, size: 20),
             tooltip: 'Perbarui Peta',
-            onPressed: _checkNetworkAndLoad,
+            onPressed: _loadMapData,
           ),
         ],
       ),
@@ -210,8 +249,8 @@ class _PetaScreenState extends State<PetaScreen> {
                         ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
                         : (_kunjunganList.isNotEmpty
                             ? LatLng(_kunjunganList.first.latitude, _kunjunganList.first.longitude)
-                            : _defaultCenter),
-                    initialZoom: 12.0,
+                            : _jakartaCenter),
+                    initialZoom: 12.5,
                   ),
                   children: [
                     TileLayer(
@@ -220,64 +259,67 @@ class _PetaScreenState extends State<PetaScreen> {
                     ),
                     MarkerLayer(
                       markers: [
-                        // Marker Petugas (Biru)
+                        // Marker Petugas (Biru dengan Lingkaran Animasi)
                         if (_currentPosition != null)
                           Marker(
                             point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
                             width: 50,
                             height: 50,
-                            child: GestureDetector(
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Lokasi Petugas Saat Ini'),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.3),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.person_pin_circle,
-                                    color: Colors.blue,
-                                    size: 40,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF2563EB).withValues(alpha: 0.2),
                                   ),
                                 ),
-                              ),
+                                Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF2563EB),
+                                    border: Border.all(color: Colors.white, width: 3),
+                                    boxShadow: const [
+                                      BoxShadow(color: Colors.black26, blurRadius: 4),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
-                        // Marker Kunjungan Pelanggan (Merah)
+                        // Marker Kunjungan Pelanggan (Pin Merah Elegan)
                         ..._kunjunganList.map(
                           (item) => Marker(
                             point: LatLng(item.latitude, item.longitude),
-                            width: 44,
-                            height: 44,
+                            width: 46,
+                            height: 46,
                             child: GestureDetector(
-                              onTap: () => _showMarkerDetails(item),
-                              child: Tooltip(
-                                message: item.namaPelanggan,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.shade700,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Colors.black26,
-                                        blurRadius: 4,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
+                              onTap: () => _showCustomerSheet(item),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFFDC2626), Color(0xFFB91C1C)],
                                   ),
-                                  child: const Icon(
-                                    Icons.location_on,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.25),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.place,
                                     color: Colors.white,
-                                    size: 26,
+                                    size: 24,
                                   ),
                                 ),
                               ),
@@ -289,79 +331,83 @@ class _PetaScreenState extends State<PetaScreen> {
                   ],
                 ),
 
-          // Peringatan Offline pada Peta jika internet mati
+          // Badge Jumlah Lokasi (Top Right)
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.pin_drop, size: 16, color: Color(0xFFDC2626)),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${_kunjunganList.length} Lokasi Terdata',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Offline Warning Banner
           if (_isOffline)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: Container(
-                color: Colors.orange.shade800,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Colors.amber.shade900,
                 child: const Row(
                   children: [
-                    Icon(Icons.wifi_off, color: Colors.white, size: 18),
+                    Icon(Icons.cloud_off, color: Colors.white, size: 16),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Mode Offline: Peta OpenStreetMap memerlukan internet untuk unduh tile, namun titik marker tetap tampil.',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
+                        'Peta tile online memerlukan internet. Marker GPS tetap ditampilkan.',
+                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-
-          // Info Jumlah Marker
-          Positioned(
-            top: _isOffline ? 48 : 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 4),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.pin_drop, size: 16, color: Colors.red),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_kunjunganList.length} Lokasi',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'my_loc',
-            tooltip: 'Pusatkan ke Lokasi Saya',
-            onPressed: () async {
-              final pos = await _locationService.getCurrentLocation();
-              if (pos != null) {
-                setState(() => _currentPosition = pos);
-                _mapController.move(LatLng(pos.latitude, pos.longitude), 14.0);
-              } else {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Lokasi GPS tidak dapat diperoleh.')),
-                );
-              }
-            },
-            child: const Icon(Icons.my_location),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.small(
+        onPressed: () async {
+          final pos = await _locationService.getCurrentLocation();
+          if (pos != null) {
+            setState(() => _currentPosition = pos);
+            _mapController.move(LatLng(pos.latitude, pos.longitude), 14.0);
+          } else {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Lokasi GPS tidak dapat diperoleh.')),
+            );
+          }
+        },
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        tooltip: 'Pusatkan ke Posisi Saya',
+        child: const Icon(Icons.my_location, size: 20),
       ),
     );
   }

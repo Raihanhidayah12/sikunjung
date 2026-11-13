@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import '../models/kunjungan.dart';
 import '../models/user.dart';
 
@@ -20,6 +22,17 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
+    if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWeb;
+      return await databaseFactory.openDatabase(
+        'sikunjung.db',
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: _onCreate,
+        ),
+      );
+    }
+
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'sikunjung.db');
 

@@ -26,40 +26,37 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
   Map<int, String> _distanceMap = {};
   bool _isLoading = true;
 
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
-  DateTime _lastShakeTime = DateTime.now();
+  StreamSubscription<AccelerometerEvent>? _accSub;
+  DateTime _lastShake = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _initShakeDetector();
+    _initShake();
   }
 
-  /// Inisialisasi fitur Shake-to-Refresh menggunakan sensor Accelerometer (Unit 6)
-  void _initShakeDetector() {
+  void _initShake() {
     try {
-      _accelerometerSubscription = _sensorService.accelerometerStream.listen((event) {
+      _accSub = _sensorService.accelerometerStream.listen((event) {
         final now = DateTime.now();
-        // Debounce getaran agar tidak trigger berkali-kali dalam 2 detik
-        if (now.difference(_lastShakeTime).inMilliseconds > 2000) {
+        if (now.difference(_lastShake).inMilliseconds > 2000) {
           if (_sensorService.isShakeDetected(x: event.x, y: event.y, z: event.z, threshold: 14.0)) {
-            _lastShakeTime = now;
+            _lastShake = now;
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Row(
                     children: [
                       Icon(Icons.vibration, color: Colors.white, size: 20),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text('Guncangan terdeteksi! Memperbarui data kunjungan...'),
-                      ),
+                      SizedBox(width: 10),
+                      Text('Goyangan terdeteksi! Memperbarui data kunjungan...'),
                     ],
                   ),
-                  backgroundColor: Colors.teal.shade800,
-                  duration: const Duration(seconds: 2),
+                  backgroundColor: const Color(0xFF0D9488),
                   behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: const Duration(seconds: 2),
                 ),
               );
               _loadData();
@@ -67,14 +64,12 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
           }
         }
       });
-    } catch (_) {
-      // Sensor tidak tersedia pada beberapa emulator
-    }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _accelerometerSubscription?.cancel();
+    _accSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -82,50 +77,48 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
-    final query = _searchController.text.trim();
-    final data = await _dbHelper.getAllKunjungan(searchQuery: query.isNotEmpty ? query : null);
+    final q = _searchController.text.trim();
+    final list = await _dbHelper.getAllKunjungan(searchQuery: q.isNotEmpty ? q : null);
 
-    // Hitung jarak dari posisi sekarang jika GPS aktif
     final userPos = await _locationService.getCurrentLocation();
-    final distances = <int, String>{};
+    final dists = <int, String>{};
 
     if (userPos != null) {
-      for (final item in data) {
+      for (final item in list) {
         if (item.id != null) {
-          final meters = _locationService.calculateDistanceInMeters(
+          final m = _locationService.calculateDistanceInMeters(
             userPos.latitude,
             userPos.longitude,
             item.latitude,
             item.longitude,
           );
-          distances[item.id!] = _locationService.formatDistance(meters);
+          dists[item.id!] = _locationService.formatDistance(m);
         }
       }
     }
 
     if (mounted) {
       setState(() {
-        _kunjunganList = data;
-        _distanceMap = distances;
+        _kunjunganList = list;
+        _distanceMap = dists;
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _deleteKunjungan(Kunjungan k) async {
+  Future<void> _deleteItem(Kunjungan k) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 48),
         title: const Text('Hapus Data Kunjungan?'),
-        content: Text('Hapus kunjungan ke "${k.namaPelanggan}"?'),
+        content: Text('Kunjungan ke "${k.namaPelanggan}" akan dihapus dari database lokal.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Batal'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Hapus'),
           ),
@@ -135,39 +128,13 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
 
     if (confirm == true && k.id != null) {
       await _dbHelper.deleteKunjungan(k.id!);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Data kunjungan berhasil dihapus'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      _loadData();
-    }
-  }
-
-  Future<void> _openForm({Kunjungan? initial}) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => KunjunganFormScreen(initialKunjungan: initial),
-      ),
-    );
-    if (result == true) {
-      _loadData();
-    }
-  }
-
-  Future<void> _openDetail(Kunjungan k) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => KunjunganDetailScreen(kunjungan: k),
-      ),
-    );
-    if (result == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data kunjungan berhasil dihapus.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       _loadData();
     }
   }
@@ -179,52 +146,53 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
         title: const Text('Daftar Kunjungan'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Segarkan Data',
+            icon: const Icon(Icons.refresh, size: 20),
+            tooltip: 'Segarkan',
             onPressed: _loadData,
           ),
         ],
       ),
       body: Column(
         children: [
-          // Search Bar
+          // Search Input
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: SearchBar(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            child: TextFormField(
               controller: _searchController,
-              hintText: 'Cari pelanggan, alamat, atau no HP...',
-              leading: const Icon(Icons.search),
-              trailing: [
-                if (_searchController.text.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      _loadData();
-                    },
-                  ),
-              ],
               onChanged: (_) => _loadData(),
-              elevation: const WidgetStatePropertyAll(1),
+              decoration: InputDecoration(
+                hintText: 'Cari pelanggan, alamat, atau no HP...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          _loadData();
+                        },
+                      )
+                    : null,
+              ),
             ),
           ),
 
-          // Petunjuk Shake to Refresh
+          // Shake Tip Pill
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: Row(
               children: [
-                Icon(Icons.screen_rotation, size: 14, color: Colors.grey.shade600),
+                const Icon(Icons.vibration, size: 14, color: Color(0xFF64748B)),
                 const SizedBox(width: 6),
                 Text(
-                  'Tips: Goyangkan perangkat (shake) untuk me-refresh data',
+                  'Goyangkan perangkat (shake) untuk memuat ulang data',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 4),
 
-          // List Kunjungan
+          // ListView with Refresh Indicator
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -233,13 +201,17 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-                            const SizedBox(height: 16),
+                            Icon(Icons.assignment_late_outlined, size: 56, color: Colors.grey.shade400),
+                            const SizedBox(height: 14),
                             Text(
                               _searchController.text.isEmpty
                                   ? 'Belum ada data kunjungan'
-                                  : 'Tidak ditemukan hasil untuk "${_searchController.text}"',
-                              style: TextStyle(color: Colors.grey.shade600),
+                                  : 'Tidak ada hasil untuk "${_searchController.text}"',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -248,6 +220,7 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
                         onRefresh: _loadData,
                         child: ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(top: 6, bottom: 80),
                           itemCount: _kunjunganList.length,
                           itemBuilder: (context, index) {
                             final item = _kunjunganList[index];
@@ -256,7 +229,15 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
                             return KunjunganCard(
                               kunjungan: item,
                               distanceText: dist,
-                              onTap: () => _openDetail(item),
+                              onTap: () async {
+                                final res = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => KunjunganDetailScreen(kunjungan: item),
+                                  ),
+                                );
+                                if (res == true) _loadData();
+                              },
                               onNavigate: () {
                                 _locationService.openGoogleMapsNavigation(
                                   item.latitude,
@@ -264,8 +245,16 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
                                   label: item.namaPelanggan,
                                 );
                               },
-                              onEdit: () => _openForm(initial: item),
-                              onDelete: () => _deleteKunjungan(item),
+                              onEdit: () async {
+                                final res = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => KunjunganFormScreen(initialKunjungan: item),
+                                  ),
+                                );
+                                if (res == true) _loadData();
+                              },
+                              onDelete: () => _deleteItem(item),
                             );
                           },
                         ),
@@ -274,9 +263,20 @@ class _KunjunganListScreenState extends State<KunjunganListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(),
-        icon: const Icon(Icons.add_location_alt),
-        label: const Text('Tambah Kunjungan'),
+        onPressed: () async {
+          final res = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const KunjunganFormScreen()),
+          );
+          if (res == true) _loadData();
+        },
+        backgroundColor: const Color(0xFF1E3A8A),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_location_alt, size: 20),
+        label: const Text(
+          'Catat Kunjungan',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
