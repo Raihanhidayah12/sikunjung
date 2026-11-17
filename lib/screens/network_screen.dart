@@ -45,22 +45,22 @@ class _NetworkScreenState extends State<NetworkScreen> {
     final statusText = _networkService.getConnectionTypeName(_results);
 
     IconData netIcon = Icons.wifi_off_rounded;
-    Color netColor = const Color(0xFFEF4444); // Red
+    Color netColor = const Color(0xFFEF4444);
 
     if (_results.contains(ConnectivityResult.wifi)) {
       netIcon = Icons.wifi_rounded;
-      netColor = const Color(0xFF2563EB); // Blue
+      netColor = const Color(0xFF2563EB);
     } else if (_results.contains(ConnectivityResult.mobile)) {
       netIcon = Icons.signal_cellular_alt_rounded;
-      netColor = const Color(0xFF10B981); // Green
+      netColor = const Color(0xFF10B981);
     } else if (_results.contains(ConnectivityResult.ethernet)) {
       netIcon = Icons.lan_rounded;
-      netColor = const Color(0xFF0D9488); // Teal
+      netColor = const Color(0xFF0D9488);
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Status Konektivitas'),
+        title: const Text('Status Jaringan & Koneksi'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
@@ -88,14 +88,14 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    isOnline ? 'Terhubung' : 'Terputus (Offline)',
+                    isOnline ? 'Terhubung' : 'Mode Offline Aktif',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: netColor,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     statusText,
                     style: const TextStyle(
@@ -104,70 +104,16 @@ class _NetworkScreenState extends State<NetworkScreen> {
                       color: Color(0xFF334155),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Text(
-                      isOnline
-                          ? 'Perangkat dapat memuat peta OpenStreetMap dan sinkronisasi data.'
-                          : 'Aplikasi beroperasi dalam mode Offline-First. Data kunjungan tetap tersimpan lokal di SQLite.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700, height: 1.4),
-                    ),
-                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // Arsitektur Offline-First
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFBFDBFE)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.cloud_done_outlined, color: Color(0xFF1D4ED8), size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Arsitektur Offline-First',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E3A8A),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'SiKunjung dirancang agar petugas lapangan tetap dapat mencatat kunjungan dan merekam koordinat GPS di area terpencil (blank spot). Data otomatis tersimpan di SQLite lokal dan tidak akan hilang.',
-                          style: TextStyle(fontSize: 12, color: Colors.blue.shade900, height: 1.4),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Tabel Perbandingan Generasi Seluler
+            // Diagnostik Layanan Lapangan
             const Padding(
               padding: EdgeInsets.only(left: 4, bottom: 8),
               child: Text(
-                'Karakteristik Generasi Jaringan Seluler',
+                'Kesiapan Layanan',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -183,31 +129,43 @@ class _NetworkScreenState extends State<NetworkScreen> {
               ),
               child: Column(
                 children: [
-                  _buildGenRow(
-                    '2G (GSM / GPRS / EDGE)',
-                    'Kecepatan: ~100 - 384 Kbps | Latensi: 300 - 1000 ms\nCocok untuk panggilan suara dan SMS sederhana.',
-                    false,
+                  _buildServiceTile(
+                    title: 'Pencatatan Data Lapangan',
+                    subtitle: 'Aktif (Penyimpanan Lokal)',
+                    icon: Icons.check_circle_outline,
+                    color: const Color(0xFF16A34A),
                   ),
                   const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  _buildGenRow(
-                    '3G (UMTS / HSPA+)',
-                    'Kecepatan: ~2 - 42 Mbps | Latensi: 100 - 200 ms\nMendukung transfer data web dan email mobile.',
-                    false,
+                  _buildServiceTile(
+                    title: 'Perekaman Titik GPS',
+                    subtitle: 'Siap via Satelit GNSS',
+                    icon: Icons.gps_fixed,
+                    color: const Color(0xFF16A34A),
                   ),
                   const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  _buildGenRow(
-                    '4G LTE (Direkomendasikan)',
-                    'Kecepatan: ~50 - 300 Mbps | Latensi: 20 - 50 ms\nStandar ideal untuk aplikasi lapangan, peta tile real-time, dan GPS.',
-                    true,
+                  _buildServiceTile(
+                    title: 'Peta Digital (Tile Map)',
+                    subtitle: isOnline ? 'Tersedia Online' : 'Memerlukan Koneksi Data',
+                    icon: isOnline ? Icons.map_outlined : Icons.cloud_off_outlined,
+                    color: isOnline ? const Color(0xFF16A34A) : const Color(0xFFEA580C),
                   ),
                   const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  _buildGenRow(
-                    '5G NR (New Radio)',
-                    'Kecepatan: 1 - 10 Gbps | Latensi: <1 - 10 ms\nKonektivitas ultra-low latency untuk IoT massal dan streaming berat.',
-                    false,
+                  _buildServiceTile(
+                    title: 'Jaringan yang Didukung',
+                    subtitle: '4G LTE / 3G / 2G / Wi-Fi',
+                    icon: Icons.cell_tower,
+                    color: const Color(0xFF2563EB),
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 24),
+
+            // Tombol Refresh Status
+            FilledButton.tonalIcon(
+              onPressed: _checkNetwork,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Perbarui Status Koneksi'),
             ),
           ],
         ),
@@ -215,38 +173,37 @@ class _NetworkScreenState extends State<NetworkScreen> {
     );
   }
 
-  Widget _buildGenRow(String title, String desc, bool isHighlighted) {
-    return Container(
-      color: isHighlighted ? const Color(0xFFF0FDF4) : Colors.transparent,
-      padding: const EdgeInsets.all(14),
+  Widget _buildServiceTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            isHighlighted ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 18,
-            color: isHighlighted ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
-          ),
-          const SizedBox(width: 10),
+          Icon(icon, size: 22, color: color),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: isHighlighted ? const Color(0xFF14532D) : const Color(0xFF0F172A),
+                    color: Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
-                  desc,
+                  subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isHighlighted ? const Color(0xFF166534) : const Color(0xFF64748B),
-                    height: 1.35,
+                    color: color,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],

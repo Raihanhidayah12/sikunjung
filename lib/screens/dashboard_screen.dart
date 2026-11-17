@@ -248,7 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const Icon(Icons.location_on, size: 16, color: Color(0xFF38BDF8)),
                       const SizedBox(width: 6),
                       Text(
-                        'GPS Siap • Database SQLite Aktif',
+                        'Layanan Lapangan Aktif • GPS Terhubung',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withValues(alpha: 0.8),

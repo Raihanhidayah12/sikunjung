@@ -298,11 +298,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Masuk dengan kredensial akun petugas Anda untuk memulai pelaporan kunjungan.',
+                        'Silakan masuk untuk melanjutkan tugas lapangan.',
                         style: TextStyle(
                           fontSize: 14,
                           color: Color(0xFF64748B),
-                          height: 1.4,
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -403,53 +402,29 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       ),
                       const SizedBox(height: 28),
 
-                      // Quick Test Chips
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.flash_on, size: 16, color: Color(0xFFF59E0B)),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Akses Cepat Pengujian:',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF334155),
-                                  ),
-                                ),
-                              ],
+                      // Quick Demo Account
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Demo:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                              fontWeight: FontWeight.w500,
                             ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ActionChip(
-                                    avatar: const Icon(Icons.badge, size: 16),
-                                    label: const Text('Petugas', style: TextStyle(fontSize: 12)),
-                                    onPressed: () => _fillProfile('petugas', 'petugas123'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ActionChip(
-                                    avatar: const Icon(Icons.admin_panel_settings, size: 16),
-                                    label: const Text('Admin', style: TextStyle(fontSize: 12)),
-                                    onPressed: () => _fillProfile('admin', 'admin123'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          ActionChip(
+                            label: const Text('Petugas', style: TextStyle(fontSize: 12)),
+                            onPressed: () => _fillProfile('petugas', 'petugas123'),
+                          ),
+                          const SizedBox(width: 8),
+                          ActionChip(
+                            label: const Text('Admin', style: TextStyle(fontSize: 12)),
+                            onPressed: () => _fillProfile('admin', 'admin123'),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 20),
 

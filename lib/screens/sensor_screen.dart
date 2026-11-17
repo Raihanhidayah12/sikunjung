@@ -332,44 +332,6 @@ class _SensorScreenState extends State<SensorScreen> {
               z: _magEvent?.z ?? 0.0,
               maxRange: 120.0,
             ),
-            const SizedBox(height: 24),
-
-            // 4. Informasi Spesifikasi Teknis (Clean Collapsible Card)
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 18, color: Color(0xFF64748B)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Ringkasan Spesifikasi Sensor',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Divider(height: 20),
-                  Text(
-                    '• Accelerometer: Rentang ±2g s.d ±16g, sampling rate 50-200 Hz. Mendeteksi gaya gravitasi bumi dan guncangan pengguna.\n'
-                    '• Gyroscope: Rentang ±250 s.d ±2000 °/s, mengukur orientasi rotasi 3 dimensi.\n'
-                    '• Magnetometer: Rentang ±4800 µT, mengukur intensitas medan geomagnetik untuk kompas digital.\n'
-                    '• GNSS / GPS: Frekuensi L1/L5 satelit, estimasi koordinat desimal akurasi 3-10 m.',
-                    style: TextStyle(fontSize: 12, height: 1.5, color: Color(0xFF475569)),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
